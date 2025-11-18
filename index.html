@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <title>Node Dashboard & History</title>
+    <style>
+        @keyframes pulse-online {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: .4; transform: scale(.85); }
+        }
+
+        @keyframes pulse-offline {
+        0%, 100% { opacity: .5; transform: scale(1); }
+        50% { opacity: .2; transform: scale(.7); }
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBRm9qP1aHVyVolTIGD42h3xbj18wJbx0",
+            authDomain: "polimos.firebaseapp.com",
+            databaseURL: "https://polimos-default-rtdb.firebaseio.com",
+            projectId: "polimos",
+            storageBucket: "polimos.firebasestorage.app",
+            messagingSenderId: "1063611639027",
+            appId: "1:1063611639027:web:8171882b9f8c7596ce4386",
+            measurementId: "G-6Q769JMP41"
+        };
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+        
+        auth.onAuthStateChanged(user => {
+            if (!user) {
+                // Not logged in, redirect to login
+                window.location.href = "auth.html";
+            }
+        });
+        firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById("userEmail").textContent = user.email;
+            }
+        });
+    </script>
+
+</head>
+<body class="bg-gray-100 text-gray-900 transition-colors duration-500 dark:bg-gray-900 dark:text-gray-400">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed lg:static md:static inset-y-0 left-0 w-64 bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-4 transition-colors duration-500 z-40 transform -translate-x-full lg:translate-x-0 md:translate-x-0 transition-transform duration-300">
+            <!-- USER PROFILE BOX -->
+            <div class="flex items-center gap-3 bg-white/30 dark:bg-gray-800/30 backdrop-blur-md px-4 py-2 rounded-xl shadow border border-white/20 dark:border-gray-700/20 w-fit">
+                <!-- SVG USER ICON -->
+                <div class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" 
+                        stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5z" />
+                        <path d="M4 22c0-4 4-7 8-7s8 3 8 7" />
+                    </svg>
+                </div>
+
+                <!-- USER EMAIL -->
+                <div>
+                    <p class="text-sm font-semibold text-gray-800 dark:text-gray-200">Welcome</p>
+                    <p id="userEmail" class="text-sm text-gray-600 dark:text-gray-300"></p>
+                </div>
+            </div>
+            <h2 class="text-xl font-bold mb-4">Select Node</h2>
+            <select id="parentNodeDropdown" class="w-full p-2 outline-none border border-gray-200 dark:border-opacity-20 rounded mb-4 transition-colors duration-500 dark:bg-gray-900"></select>
+            <select id="childNodeDropdown" class="w-full p-2 outline-none border border-gray-200 dark:border-opacity-20 rounded mb-4 transition-colors duration-500 dark:bg-gray-900"></select>
+
+            <h2 class="text-xl font-bold mb-4">History Filters</h2>
+            <label class="block font-semibold mb-1">Date Range</label>
+            <input type="date" id="startDate" class="w-full p-2 outline-none border border-gray-200 dark:border-opacity-20 rounded mb-2 transition-colors duration-500 dark:bg-gray-900" />
+            <input type="date" id="endDate" class="w-full p-2 outline-none border border-gray-200 dark:border-opacity-20 rounded mb-4 transition-colors duration-500 dark:bg-gray-900" />
+
+            <button id="applyFilterBtn" class="w-full bg-blue-600 text-white py-2 rounded mb-2 transition-colors duration-500 dark:text-gray-300">Apply History Filter</button>
+            <button onclick="logout()" class="w-full bg-red-500 text-white py-2 rounded transition-colors duration-500 dark:text-gray-300">Logout</button>
+        </aside>
+        
+        <!-- GLOBAL BLUR LOADING OVERLAY -->
+        <div id="loadingOverlay" class="hidden fixed inset-0 bg-white/40 backdrop-blur-xs flex items-center justify-center z-50">
+            <div class="animate-spin rounded-full h-16 w-16 border-4 border-gray-300 border-t-blue-500"></div>
+        </div>
+        <div id="asideBackdrop" class="hidden fixed inset-0 bg-black/20 backdrop-blur-xs z-30 lg:hidden">
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div class="flex bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-4 transition-colors duration-500 mb-4">
+                <h1 class="text-lg lg:text-2xl md:text-xl font-bold">PoLiMos Dashboard</h1>
+
+                <button id="alarmBtn" class="relative w-8 h-8 flex items-center justify-center rounded-full duration-300 bg-gray-400 shadow dark:bg-gray-900 float-right ml-auto hover:bg-gray-300 hover:dark:bg-gray-800">
+                    <!-- Bell Icon -->
+                    <svg id="bellIcon" class="h-6 w-6" xmlns="http://www.w3.org/2000/svg"
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 
+                            6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 
+                            8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 
+                            17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+
+                    <!-- Badge Counter -->
+                    <span id="alarmBadge"
+                        class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                        0
+                    </span>
+                </button>
+                <button id="darkToggle" class="w-8 h-8 flex items-center justify-center rounded-full duration-300 bg-gray-400 shadow dark:bg-gray-900 float-right mx-2 hover:bg-gray-300 hover:dark:bg-gray-800">
+
+                    <!-- Sun Icon (Visible in Light Mode) -->
+                    <svg id="sunIcon" xmlns="http://www.w3.org/2000/svg" 
+                        class="h-6 w-6 block dark:hidden" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M7.05 
+                            16.95l-1.414 1.414m12.728 0l-1.414-1.414M7.05 
+                            7.05L5.636 5.636M12 7a5 5 0 100 10 5 5 0 000-10z" />
+                    </svg>
+
+                    <!-- Moon Icon (Visible in Dark Mode) -->
+                    <svg id="moonIcon" xmlns="http://www.w3.org/2000/svg" 
+                        class="h-6 w-6 hidden dark:block" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                            d="M20.354 15.354A9 9 0 018.646 3.646 
+                            9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                </button>
+                <button id="asideToggle" class="w-8 h-8 lg:hidden md:hidden flex items-center justify-center rounded-full duration-300  float-right hover:bg-gray-300 hover:dark:bg-gray-800 transition">
+                    <!-- Menu Icon -->
+                    <svg id="menuIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="16" x2="14" y2="16"></line>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    </svg>
+
+                    
+                    <!-- Close Icon -->
+                    <svg id="closeIcon" xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Sliding Alarm Panel -->
+            <div id="alarmPanel"
+                class="fixed right-4 top-20 w-80 max-h-[70vh] bg-white dark:bg-gray-800 
+                        shadow-xl rounded-xl p-4 overflow-y-auto hidden transition-all duration-300 z-50">
+
+                <h2 class="text-lg font-bold mb-3">Active Alarms</h2>
+
+                <ul id="alarmList" class="space-y-3"></ul>
+
+            </div>
+
+            <!-- Toggle mode -->
+            <div class="flex items-center gap-4 mb-4">
+                <label class="font-semibold">Mode:</label>
+                <select id="viewMode" class="p-2 outline-none border border-gray-200 dark:border-opacity-10 rounded transition-colors duration-500 dark:bg-gray-900">
+                    <option value="live">Live Dashboard</option>
+                    <option value="history">History & Analytics</option>
+                </select>
+            </div>
+            
+            <!-- Metadata Section -->
+            <div class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-4 transition-colors duration-500 mb-4">
+                <div class="flex mb-2 gap-2"><span class="text-2xl" id="meta_parent_id">--</span>
+                    <div class="flex items-center gap-2">
+                        <div id="status_led" class="h-4 w-4 rounded-full"></div>
+                        <span id="status_label" class="text-sm font-medium"></span>
+                    </div>
+                    <div title="Last Seen" class="text-xs flex items-center font-medium ml-auto float-right">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clock-fill" viewBox="0 0 16 16">
+                            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/>
+                        </svg>
+                        <!-- <span class="px-2">Last Sent:</span> -->
+                        <span class="pl-2" id="meta_timestamp">--</span>
+                    </div>
+                </div>
+                <hr class="w-full my-4 dark:opacity-20">
+                <div id="metadata" class="grid grid-cols-3 lg:grid-cols-5 md:grid-cols-4 gap-2 text-sm">
+                    <div><strong>Lat:</strong> <span id="meta_lat">--</span></div>
+                    <div><strong>Lon:</strong> <span id="meta_lon">--</span></div>
+                    <div><strong>Speed:</strong> <span id="meta_speed">--</span></div>
+                    <div><strong>Alt:</strong> <span id="meta_alt">--</span></div>
+                    <div><strong>Accuracy:</strong> <span id="meta_accuracy">--</span></div>
+                </div>
+            </div>
+
+            <!-- Live Dashboard -->
+            <div id="liveDashboard">
+                <h2 class="text-lg font-bold mb-2">Sensor Data</h2>
+
+                <!-- Latest Child Data -->
+                <div>
+                    <!-- Latest Child Data -->
+                    <div id="childData" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 mb-2">
+                        <div id="sensor_current_rms" class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-4 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                        <svg class="text-orange-500 background-grey-500" xmlns="http://www.w3.org/2000/svg" width="64" height="64" 
+                            viewBox="0 0 64 64" fill="currentColor">
+                        <path d="M28 6H20L12 32h12l-4 26L52 24H36l4-18z"/>
+                        </svg>
+
+                            <div>
+                            <div class="text-gray-500">Current RMS</div>
+                            <div id="child_current_rms" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+
+                        <div id="sensor_tilt_x" class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-8 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50">
+                            <!-- Outer circle/vial -->
+                            <path d="M50,10 C27.9,10,10,27.9,10,50s17.9,40,40,40s40-17.9,40-40S72.1,10,50,10z M50,80c-16.6,0-30-13.4-30-30s13.4-30,30-30s30,13.4,30,30S66.6,80,50,80z" fill="#333"/>
+                            
+                            <!-- Inner level lines -->
+                            <path d="M48,30v40 M52,30v40" stroke="#777" stroke-width="1" fill="none"/>
+                            
+                            <!-- Bubble inside the circle -->
+                            <circle cx="50" cy="50" r="8" fill="#4CAF50"/>
+                            </svg>
+
+
+                            <div>
+                            <div class="text-gray-500">Tilt X</div>
+                            <div id="child_tilt_x" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+
+                        <div id="sensor_tilt_y" class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-8 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50" style="transform: rotate(90deg)">
+                            <!-- Outer circle/vial -->
+                            <path d="M50,10 C27.9,10,10,27.9,10,50s17.9,40,40,40s40-17.9,40-40S72.1,10,50,10z M50,80c-16.6,0-30-13.4-30-30s13.4-30,30-30s30,13.4,30,30S66.6,80,50,80z" fill="#333"/>
+                            
+                            <!-- Inner level lines -->
+                            <path d="M48,30v40 M52,30v40" stroke="#777" stroke-width="1" fill="none"/>
+                            
+                            <!-- Bubble inside the circle -->
+                            <circle cx="50" cy="50" r="8" fill="#4CAF50"/>
+                            </svg>
+                            <div>
+                            <div class="text-gray-500">Tilt Y</div>
+                            <div id="child_tilt_y" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+
+                        <div id="sensor_tilt_z" class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-8 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="50" height="50" style="transform: rotate(45deg)">
+                            <!-- Outer circle/vial -->
+                            <path d="M50,10 C27.9,10,10,27.9,10,50s17.9,40,40,40s40-17.9,40-40S72.1,10,50,10z M50,80c-16.6,0-30-13.4-30-30s13.4-30,30-30s30,13.4,30,30S66.6,80,50,80z" fill="#333"/>
+                            
+                            <!-- Inner level lines -->
+                            <path d="M48,30v40 M52,30v40" stroke="#777" stroke-width="1" fill="none"/>
+                            
+                            <!-- Bubble inside the circle -->
+                            <circle cx="50" cy="50" r="8" fill="#4CAF50"/>
+                            </svg>
+                            <div>
+                            <div class="text-gray-500">Tilt Z</div>
+                            <div id="child_tilt_z" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+
+                        <div id="sensor_battery" class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-8 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="45" height="45">
+                                <!-- Main battery body -->
+                                <rect x="6" y="2" width="12" height="20" rx="2" ry="2" fill="none" stroke="#333" stroke-width="2"/>
+                                
+                                <!-- Positive terminal (cap) -->
+                                <rect x="9" y="0" width="6" height="2" rx="1" ry="1" fill="#333"/>
+                                
+                                <!-- Charge level indicator (full) -->
+                                <rect x="8" y="4" width="8" height="16" rx="1" ry="1" fill="#4CAF50"/>
+                            </svg>
+                            <div>
+                            <div class="text-gray-500">Battery</div>
+                            <div id="child_battery" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white/30 dark:bg-gray-800/30 backdrop-blur-md shadow-lg rounded-xl p-8 transition-colors duration-500 flex items-center gap-2 hover:scale-105 hover:shadow-xl">
+                            
+                            <div>
+                            <div class="text-gray-500">Status</div>
+                            <div class="flex items-center gap-2">
+                                <div id="sensor_status_led" class="h-4 w-4 rounded-full"></div>
+                                <span id="sensor_status_label" class="text-sm font-medium"></span>
+                            </div>
+                            <div id="child_status" class="text-lg font-bold">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Table -->
+            <div id="historyView" class="w-full hidden">
+                <div class="flex items-center gap-4 mb-4">
+                    <label class="font-semibold">History Type:</label>
+                    <select id="historyType" class="p-2 outline-none border border-gray-200 dark:border-opacity-10 rounded transition-colors duration-500 dark:bg-gray-900">
+                        <option value="child">Child Node History</option>
+                        <option value="parent">Parent Node History</option>
+                    </select>
+                </div>
+
+                <div class="w-full overflow-x-auto">
+                    <!-- Parent History Table -->
+                    <table id="parentHistoryTable" class="w-screen border-collapse dark:text-gray-200 transition-colors duration-500 hidden overflow-x-auto">
+                        <thead>
+                            <tr class="bg-gray-200 text-left dark:bg-gray-900 dark:text-gray-400">
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Timestamp</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Speed</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Latitude</th>
+                                <th class="p-2 border  border-gray-200 dark:border-opacity-10">Longitude</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Altitude</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">VSAT</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">USAT</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="parentHistoryBody" class="text-sm"></tbody>
+                    </table>
+
+                    <!-- Child History Table -->
+                    <table id="childHistoryTable" class="w-screen border-collapse dark:text-gray-200 transition-colors duration-500 hidden overflow-x-auto">
+                        <thead>
+                            <tr class="bg-grey-200 text-left dark:bg-grey-900 dark:text-gray-400">
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Timestamp</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Current RMS</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Tilt X</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Tilt Y</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Tilt Z</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Battery</th>
+                                <th class="p-2 border border-gray-200 dark:border-opacity-10">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="childHistoryBody" class="text-sm"></tbody>
+                    </table>
+                </div>
+                <!-- Pagination Controls -->
+                <div id="paginationControls" class="flex items-center gap-2 mt-4 float-right">
+                    <button id="prevPage" class="px-3 py-1 bg-gray-300 rounded  transition-colors duration-500 dark:bg-gray-800">Prev</button>
+                    <span id="pageIndicator" class="font-semibold"></span>
+                    <button id="nextPage" class="px-3 py-1 bg-gray-300 rounded  transition-colors duration-500 dark:bg-gray-800">Next</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <script>
+        // DOM REFERENCES
+        const alarmBtn = document.getElementById("alarmBtn");
+        // const alarmBadge = document.getElementById("alarmBadge");
+        const alarmPanel = document.getElementById("alarmPanel");
+        // const alarmList = document.getElementById("alarmList");
+        const toggleBtn = document.getElementById("darkToggle");
+        const sidebar = document.getElementById("sidebar");
+        const asideToggle = document.getElementById("asideToggle");
+        const menuIcon = document.getElementById("menuIcon");
+        const closeIcon = document.getElementById("closeIcon");
+        const asideBackdrop = document.getElementById("asideBackdrop");
+
+        toggleBtn.addEventListener("click", () => {
+            document.documentElement.classList.toggle("dark");
+
+            // Save preference
+            if (document.documentElement.classList.contains("dark")) {
+                localStorage.setItem("theme", "dark");
+            } else {
+                localStorage.setItem("theme", "light");
+            }
+        });
+
+        // Load theme on refresh
+        if (localStorage.getItem("theme") === "dark") {
+            document.documentElement.classList.add("dark");
+        }
+        
+        asideToggle.addEventListener("click", () => {
+            const isOpen = sidebar.classList.contains("translate-x-0");
+
+            if (isOpen) {
+                // Close sidebar
+                sidebar.classList.add("-translate-x-full");
+                sidebar.classList.remove("translate-x-0");
+                asideBackdrop.classList.add("hidden");
+
+                menuIcon.classList.remove("hidden");
+                closeIcon.classList.add("hidden");
+            } else {
+                // Open sidebar
+                sidebar.classList.remove("-translate-x-full");
+                sidebar.classList.add("translate-x-0");
+                asideBackdrop.classList.remove("hidden");
+
+                menuIcon.classList.add("hidden");
+                closeIcon.classList.remove("hidden");
+            }
+        });
+
+        // Clicking backdrop closes sidebar
+        asideBackdrop.addEventListener("click", () => {
+            sidebar.classList.add("-translate-x-full");
+            sidebar.classList.remove("translate-x-0");
+            asideBackdrop.classList.add("hidden");
+
+            menuIcon.classList.remove("hidden");
+            closeIcon.classList.add("hidden");
+        });
+
+
+        let alarmPanelVisible = false;
+
+        // Toggle alarm panel visibility
+        alarmBtn.addEventListener("click", () => {
+            alarmPanelVisible = !alarmPanelVisible;
+            alarmPanel.classList.toggle("hidden", !alarmPanelVisible);
+        });
+        
+
+        
+
+    </script>
+
+
+<script>
+    const parentDropdown = document.getElementById("parentNodeDropdown");
+    const childDropdown = document.getElementById("childNodeDropdown");
+    const parentDataDiv = document.getElementById("parentData");
+    const childDataDiv = document.getElementById("childData");
+    const metadataDiv = document.getElementById("metadata");
+    const historyTable = document.getElementById("historyTable");
+    const startDate = document.getElementById("startDate");
+    const endDate = document.getElementById("endDate");
+    const applyFilterBtn = document.getElementById("applyFilterBtn");
+    const viewMode = document.getElementById("viewMode");
+    const liveDashboard = document.getElementById("liveDashboard");
+    const historyView = document.getElementById("historyView");
+    const night = document.getElementById("night");
+    const parentHistoryTable = document.getElementById("parentHistoryTable");
+    const childHistoryTable = document.getElementById("childHistoryTable");
+    const historyType = document.getElementById("historyType");
+
+    let parentListener = null;
+    let childListener = null;
+
+    let parentHistoryArray = [];
+    let childHistoryArray = [];
+
+    let currentPage = 1;
+    const pageSize = 20;
+
+    function showLoading() {
+        document.getElementById("loadingOverlay").classList.remove("hidden");
+    }
+
+    function hideLoading() {
+        document.getElementById("loadingOverlay").classList.add("hidden");
+    }
+
+    function loadParentMetadata(parentId) {
+        const parentMetaRef = db.ref(`${parentId}/parent_data_history`);
+
+        // Listen for the last record (latest parent metadata)
+        // parentMetaRef.limitToLast(1).on('value', snapshot => {
+        parentMetaRef.on('value', snapshot => {
+            snapshot.forEach(snap => {
+                const data = snap.val();
+                if (!data) return;
+
+                document.getElementById('meta_parent_id').innerText = parentId || '--';
+                document.getElementById('meta_lat').innerText = data.lat || '--';
+                document.getElementById('meta_lon').innerText = data.lon || '--';
+                document.getElementById('meta_speed').innerText = data.speed || '--';
+                document.getElementById('meta_alt').innerText = data.alt || '--';
+                document.getElementById('meta_accuracy').innerText = data.accuracy || '--';
+                document.getElementById('meta_timestamp').innerText = data.timestamp ? new Date(data.timestamp).toLocaleString() : '--';
+            });
+        });
+    }
+
+    // Load parent nodes
+    db.ref('/').on('value', snapshot => {
+    parentDropdown.innerHTML = '';
+    snapshot.forEach(child => {
+        if(child.key === 'alarms') return;
+        const option = document.createElement('option');
+        option.value = child.key;
+        option.text = child.key;
+        parentDropdown.appendChild(option);
+    });
+    if(parentDropdown.options.length > 0) {
+        loadChildNodes(parentDropdown.value);
+        if(viewMode.value === 'live') loadParentData(parentDropdown.value);
+    }
+    });
+
+    // Load child nodes
+    function loadChildNodes(parentId) {
+        showLoading();
+        db.ref(`${parentId}/latest_sensor_data`).once('value', snapshot => {
+            hideLoading();
+            childDropdown.innerHTML = '';
+            snapshot.forEach(childSnap => {
+                const option = document.createElement('option');
+                option.value = childSnap.key;
+                option.text = childSnap.key;
+                childDropdown.appendChild(option);
+            });
+            if(childDropdown.options.length > 0 && viewMode.value === 'live') {
+            loadChildData(parentId, childDropdown.value);
+            }
+        });
+    }
+
+    parentDropdown.addEventListener('change', e => {
+        loadChildNodes(e.target.value);
+        loadParentMetadata(e.target.value);
+        if(viewMode.value === 'live'){
+            loadParentData(e.target.value);
+        }
+
+        // if (viewMode.value === 'history') {
+        else {
+            const start = new Date(startDate.value).getTime();
+            const end = new Date(endDate.value).getTime() + 24*60*60*1000;
+
+            if (historyType.value === 'parent') {
+                loadParentHistory(parentDropdown.value, start, end);
+            } else {
+                loadChildHistory(parentDropdown.value, childDropdown.value, start, end);
+            }
+        }
+    });
+
+    childDropdown.addEventListener('change', e => {
+        if(viewMode.value === 'live') loadChildData(parentDropdown.value, e.target.value);
+
+        // if (viewMode.value === 'history' && historyType.value === 'child') {
+        else {
+            const parentId = parentDropdown.value;
+            const selectedChildId = childDropdown.value;
+
+            const start = new Date(startDate.value).getTime();
+            const end = new Date(endDate.value).getTime() + 24*60*60*1000;
+
+            loadChildHistory(parentId, selectedChildId, start, end);
+        }
+    });
+
+    // Live Data Functions
+    function loadParentData(parentId) {
+        showLoading();
+        loadParentMetadata(parentId);
+        checkParentActive(parentId);
+        parentHistoryTable.classList.remove('hidden');
+        childHistoryTable.classList.add('hidden');
+        if(parentListener) parentListener.off();
+        parentListener = db.ref(`${parentId}/parent_data_history`).limitToLast(1);
+        parentListener.on('value', snapshot => {
+            hideLoading();
+            parentDataDiv.innerHTML = '';
+            metadataDiv.innerHTML = '';
+            snapshot.forEach(dataSnap => {
+                const data = dataSnap.val();
+                for(const key in data) {
+                    if(key === 'skip_this_field') continue;
+                    const div = document.createElement('div');
+                    div.className = "bg-white p-4 shadow rounded";
+                    div.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
+                    parentDataDiv.appendChild(div);
+                    metadataDiv.appendChild(div.cloneNode(true));
+                }
+            });
+        });
+    }
+
+    function loadChildData(parentId, childId) {
+        showLoading();
+        checkSensorActive(parentId, childId);
+        parentHistoryTable.classList.add('hidden');
+        childHistoryTable.classList.remove('hidden');
+
+        if(childListener) childListener.off();
+        childListener = db.ref(`${parentId}/latest_sensor_data/${childId}`);
+
+        childListener.on('value', snapshot => {
+            hideLoading();
+            const data = snapshot.val();
+            if(!data) return;
+
+            // Helper function to update card color based on threshold
+            function updateCard(id, pid, value, thresholds = {low: null, high: null}) {
+                const card = document.getElementById(id);
+                const pcard = document.getElementById(pid);
+                card.innerText = value !== undefined ? value : '--';
+
+                // Reset classes first
+                pcard.classList.remove('bg-red-200', 'bg-yellow-200', 'bg-green-100', 'dark:bg-yellow-200', 'dark:bg-red-200', 'dark:bg-green-100');
+                // card.parentElement.classList.remove('bg-red-200', 'bg-yellow-200', 'bg-green-100');
+
+                // this ois
+                // Apply color alert based on thresholds
+                if(thresholds.low !== null && value < thresholds.low) {
+                    pcard.classList.add('bg-yellow-200', 'dark:bg-yellow-200'); // warning
+                    // pcard.parentElement.classList.add('bg-yellow-200'); // warning
+                } else if(thresholds.high !== null && value > thresholds.high) {
+                    pcard.classList.add('bg-red-200','dark:bg-red-200'); // danger
+                } else {
+                    pcard.classList.add('bg-white-100/30','dark:bg-gray-800/30'); // normal
+                }
+            }
+
+            // Example thresholds (you can adjust based on your system)
+            updateCard('child_current_rms','sensor_current_rms', data.current_rms, {low: 5, high: 10}); // RMS > 5 is danger
+            updateCard('child_tilt_x', 'sensor_tilt_x', data.tilt_x, {low:-20, high: 20});          // Tilt > 10° is danger
+            updateCard('child_tilt_y','sensor_tilt_y', data.tilt_y, {low:-20, high: 20});
+            updateCard('child_tilt_z','sensor_tilt_z', data.tilt_z, {low:-20, high: 20});
+            updateCard('child_battery', 'sensor_battery', data.v_batt, {low: 3, high: 5}); 
+
+            // Update each hard-coded field
+            // document.getElementById('child_current_rms').innerText = data.current_rms || '--';
+            // document.getElementById('child_tilt_x').innerText = data.tilt_x || '--';
+            // document.getElementById('child_tilt_y').innerText = data.tilt_y || '--';
+            // document.getElementById('child_tilt_z').innerText = data.tilt_z || '--';
+            // document.getElementById('child_battery').innerText = data.v_batt || '--';
+            document.getElementById('child_status').innerText = '';
+        });
+        updateParentMetadata(parentId);
+    }
+
+    const parentRecentDiv = document.getElementById("parentRecent");
+    const childRecentDiv = document.getElementById("childRecent");
+
+    // Maintain arrays for last 10 updates
+    let parentLast10 = [];
+    let childLast10 = [];
+
+    // View mode toggle
+    viewMode.addEventListener('change', e => {
+        if(e.target.value === 'live') {
+            liveDashboard.classList.remove('hidden');
+            historyView.classList.add('hidden');
+            loadParentData(parentDropdown.value);
+            loadChildData(parentDropdown.value, childDropdown.value);
+        } else {
+            liveDashboard.classList.add('hidden');
+            historyView.classList.remove('hidden');
+            // STOP live listeners
+            if (parentListener) parentListener.off();
+            if (childListener) childListener.off();
+            // Load correct history table automatically
+            loadHistoryAccordingToMode();
+        }
+    });
+
+    function loadHistoryAccordingToMode() {
+        
+        const parentId = parentDropdown.value;
+        const childId = childDropdown.value;
+        const start = new Date(startDate.value).getTime();
+        const end = new Date(endDate.value).getTime() + 24*60*60*1000;
+        loadParentMetadata(parentId);
+
+        if (historyType.value === 'parent') {
+
+            parentHistoryTable.classList.remove('hidden');
+            childHistoryTable.classList.add('hidden');
+
+            loadParentHistory(parentId, start, end);
+
+        } else {
+
+            childHistoryTable.classList.remove('hidden');
+            parentHistoryTable.classList.add('hidden');
+
+            loadChildHistory(parentId, childId, start, end);
+        }
+    }
+
+    historyType.addEventListener('change', () => {
+        const parentId = parentDropdown.value;
+        const childId = childDropdown.value;
+
+        const start = new Date(startDate.value).getTime();
+        const end = new Date(endDate.value).getTime() + 24*60*60*1000;
+
+        if (historyType.value === 'parent') {
+
+            parentHistoryTable.classList.remove('hidden');
+            childHistoryTable.classList.add('hidden');
+
+            loadParentHistory(parentId, start, end);
+
+        } else {
+
+            childHistoryTable.classList.remove('hidden');
+            parentHistoryTable.classList.add('hidden');
+
+            loadChildHistory(parentId, childId, start, end);
+        }
+    });
+
+    function renderPaginatedTable(dataArray, tableBodyElement) {
+        tableBodyElement.innerHTML = "";
+
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+
+        const pageItems = dataArray.slice(startIndex, endIndex);
+
+        pageItems.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = row;
+            tableBodyElement.appendChild(tr);
+        });
+
+        document.getElementById("pageIndicator").innerText =
+        `Page ${currentPage} of ${Math.ceil(dataArray.length / pageSize)}`;
+    }
+
+    // Apply history filter
+    applyFilterBtn.addEventListener('click', () => {
+        const parentId = parentDropdown.value;
+        const childId = childDropdown.value;
+        const start = new Date(startDate.value).getTime();
+        const end = new Date(endDate.value).getTime() + 24*60*60*1000; // full day
+        const type = historyType.value; // parent or child
+
+        if (type === 'parent') {
+            loadParentHistory(parentId, start, end);
+        } else {
+            loadChildHistory(parentId, selectedChildId, start, end);
+        }
+    });
+
+    // historyTable.innerHTML = '';
+
+    // Load parent history
+    // function loadParentHistory(parentId, start, end) {
+    //     const parentBody = document.getElementById('parentHistoryBody');
+    //     parentBody.innerHTML = '';
+    //     db.ref(`${parentId}/parent_data_history`).orderByChild('timestamp').once('value', snapshot => {
+    //         snapshot.forEach(snap => {
+    //         const data = snap.val();
+    //         const ts = data.timestamp || snap.key;
+    //         if(ts < start || ts > end) return;
+    //         const row = document.createElement('tr');
+    //         row.innerHTML = `
+    //             <td class="p-2 border">${new Date(ts).toLocaleString()}</td>
+    //             <td class="p-2 border">${data.speed || ''}</td>
+    //             <td class="p-2 border">${data.lat || ''}</td>
+    //             <td class="p-2 border">${data.lon || ''}</td>
+    //             <td class="p-2 border">${data.alt || ''}</td>
+    //             <td class="p-2 border">${data.vsat || ''}</td>
+    //             <td class="p-2 border">${data.usat || ''}</td>
+    //             <td class="p-2 border">${data.accuracy || ''}</td>
+    //         `;
+    //         parentBody.appendChild(row);
+    //         });
+    //     });
+    // }
+
+    function loadParentHistory(parentId, start, end) {
+        showLoading();
+        const tableBody = document.getElementById("parentHistoryBody");
+        parentHistoryArray = [];
+        currentPage = 1;
+
+        db.ref(`${parentId}/parent_data_history`)
+        .orderByChild("timestamp")
+        .on("value", snapshot => {
+            hideLoading();
+            snapshot.forEach(snap => {
+                const data = snap.val();
+                const ts = data.timestamp;
+
+                // if (ts >= start && ts <= end) {
+
+                    parentHistoryArray.push(`
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${new Date(ts).toLocaleString()}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.speed || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.lat || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.lon || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.alt || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.vsat || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.usat || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.accuracy || ''}</td>
+                    `);
+                    parentHistoryArray.reverse();;
+
+                // }
+            });
+
+            renderPaginatedTable(parentHistoryArray, tableBody);
+        });
+    }
+
+    function loadChildHistory(parentId, childId, start, end) {
+        showLoading();
+        const tableBody = document.getElementById("childHistoryBody");
+        childHistoryArray = [];
+        currentPage = 1;
+
+        db.ref(`${parentId}/sensor_data_history`)
+        .orderByChild("ts")
+        .on("value", snapshot => {
+            hideLoading();
+            snapshot.forEach(snap => {
+                const data = snap.val();
+                if (data.node_id !== childId) return;
+
+                const ts = data.ts;
+                // if (ts >= start && ts <= end) {
+
+                    childHistoryArray.push(`
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${new Date(ts).toLocaleString()}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.current_rms || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.tilt_x || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.tilt_y || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.tilt_z || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.battery || ''}</td>
+                        <td class="p-2 border border-gray-200 dark:border-opacity-10">${data.status || ''}</td>
+                    `);
+                    childHistoryArray.reverse();
+
+                // }
+            });
+
+            renderPaginatedTable(childHistoryArray, tableBody);
+        });
+    }
+
+    document.getElementById("nextPage").addEventListener("click", () => {
+        const maxPages = historyType.value === "parent"
+            ? Math.ceil(parentHistoryArray.length / pageSize)
+            : Math.ceil(childHistoryArray.length / pageSize);
+
+        if (currentPage < maxPages) {
+            currentPage++;
+            reloadCurrentHistoryPage();
+        }
+    });
+
+    document.getElementById("prevPage").addEventListener("click", () => {
+        if (currentPage > 1) {
+            currentPage--;
+            reloadCurrentHistoryPage();
+        }
+    });
+
+    function reloadCurrentHistoryPage() {
+        if (historyType.value === "parent") {
+            renderPaginatedTable(parentHistoryArray, document.getElementById("parentHistoryBody"));
+        } else {
+            renderPaginatedTable(childHistoryArray, document.getElementById("childHistoryBody"));
+        }
+    }
+
+    function updateStatus(isActive) {
+        const led = document.getElementById("status_led");
+        const label = document.getElementById("status_label");
+
+        if (isActive) {
+            led.className = "h-4 w-4 rounded-full bg-green-500 shadow-lg shadow-green-400 animate-[pulse-online_1s_ease-in-out_infinite]";
+            label.innerText = "Online";
+            label.className = "text-green-500 font-semibold";
+        } else {
+            led.className = "h-4 w-4 rounded-full bg-red-500 shadow-lg shadow-red-400 animate-[pulse-offline_1.4s_ease-in-out_infinite]";
+            label.innerText = "Offline";
+            label.className = "text-red-500 font-semibold";
+        }
+    }
+
+    function updateSensorStatus(isActive) {
+        const led = document.getElementById("sensor_status_led");
+        const label = document.getElementById("sensor_status_label");
+
+        if (isActive == "ok") {
+            led.className = "h-4 w-4 rounded-full bg-green-500 shadow-lg shadow-green-400 animate-[pulse-online_1s_ease-in-out_infinite]";
+            label.innerText = isActive;
+            label.className = "text-green-500 font-semibold";
+        } else {
+            led.className = "h-4 w-4 rounded-full bg-red-500 shadow-lg shadow-red-400 animate-[pulse-offline_1.4s_ease-in-out_infinite]";
+            label.innerText = isActive
+            label.className = "text-red-500 font-semibold";
+        }
+    }
+
+    function checkParentActive(parentId) {
+        const ref = db.ref(`${parentId}/latest_parent_data/timestamp`);
+        ref.on('value', snap => {
+            const lastSeen = snap.val() || 0;
+            const now = Date.now();
+
+            const isActive = (now - lastSeen) < 30000; // 30 sec window
+            updateStatus(isActive);
+        });
+    }
+
+    function checkSensorActive(parentId, childId) {
+        const ref = db.ref(`${parentId}/latest_sensor_data/${childId}/status`);
+        ref.on('value', snap => {
+            const status = snap.val() || down;
+            updateSensorStatus(status);
+        });
+    }
+
+    /* ---------------------------
+    LIVE ALARM FETCHING 
+    ---------------------------- */
+    function startAlarmListener() {
+
+        db.ref(`alarms`).on("value", snapshot => {
+            const alarmList = document.getElementById("alarmList");
+            const alarmBadge = document.getElementById("alarmBadge");
+
+            alarmList.innerHTML = "";
+            let alarmCount = 0;
+
+            if (!snapshot.exists()) {
+                alarmList.innerHTML = `
+                    <li class="p-3 bg-gray-100 dark:bg-gray-700 text-center rounded-lg shadow">
+                        <span class="text-gray-500 dark:text-gray-300">No Active Alarms</span>
+                    </li>
+                `;
+                return;
+            }
+
+            // Loop through each alarm node (e.g., N101, P101)
+            snapshot.forEach(child => {
+                const id = child.key;     // e.g., "N101"
+                const data = child.val(); // The object under that ID
+
+                alarmCount++;
+
+                // Build message by looping inside each object
+                let details = "";
+                for (let key in data) {
+                    details += `${key}: ${data[key]}, `;
+                }
+
+                details = details.slice(0, -2); // remove last comma
+
+                // Create UI item
+                const item = document.createElement("li");
+                item.className =
+                    "p-3 bg-gray-100 dark:bg-gray-700 rounded-lg shadow flex justify-between items-center";
+
+                item.innerHTML = `
+                    <div>
+                        <p class="font-semibold">${id}</p>
+                        <p class="text-xs text-gray-600 dark:text-gray-300">
+                            ${details}
+                        </p>
+                    </div>
+
+                    <button class="px-2 py-1 bg-green-600 text-white text-xs rounded"
+                            onclick="fixAlarm('${id}')">
+                        FIXED
+                    </button>
+                `;
+
+                alarmList.appendChild(item);
+            });
+
+            // Update badge
+            if (alarmCount > 0) {
+                alarmBadge.textContent = alarmCount;
+                alarmBadge.classList.remove("hidden");
+            } else {
+                alarmBadge.classList.add("hidden");
+            }
+        });
+    }
+
+    // Start listening immediately
+    startAlarmListener();
+
+
+    // -----------------------------
+    // DELETE/FIX ALARM
+    // -----------------------------
+    function fixAlarm(id) {
+        db.ref("alarms/" + id).remove()
+            .then(() => console.log("Alarm removed:", id))
+            .catch(err => console.error("Remove error:", err));
+    }
+    
+    function logout() {
+        firebase.auth().signOut().then(() => {
+            window.location.href = "auth.html";
+        }).catch(error => {
+            console.error("Logout error:", error);
+        });
+        // auth.signOut().then(() => {
+        //     alert('logout');
+        //     window.location.href = "auth.html";
+        // });
+    }
+</script>
+</body>
+</html>

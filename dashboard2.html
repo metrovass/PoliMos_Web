@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring Dashboard</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body { background: #f5f6fa; }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans">
+  <div class="flex">
+    <!-- Sidebar -->
+    <div class="w-64 bg-white p-4 shadow-lg h-screen">
+      <h2 class="text-xl font-bold mb-4">Select Node</h2>
+      <select id="parentNodeDropdown" class="w-full p-2 border rounded mb-4"></select>
+      <select id="childNodeDropdown" class="w-full p-2 border rounded mb-4"></select>
+      <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 p-6">
+      <h1 class="text-2xl font-bold mb-4">Node Dashboard</h1>
+      <div id="parentData" class="grid grid-cols-3 gap-4 mb-6"></div>
+      <div id="childData" class="grid grid-cols-3 gap-4"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "YOUR_DB_URL",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MSG_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const parentDropdown = document.getElementById("parentNodeDropdown");
+    const childDropdown = document.getElementById("childNodeDropdown");
+    const parentDataDiv = document.getElementById("parentData");
+    const childDataDiv = document.getElementById("childData");
+
+    let parentListener = null;
+    let childListener = null;
+
+    // Fetch and populate parent nodes
+    db.ref('/').on('value', snapshot => {
+      parentDropdown.innerHTML = '';
+      snapshot.forEach(child => {
+        const option = document.createElement('option');
+        option.value = child.key;
+        option.text = child.key;
+        parentDropdown.appendChild(option);
+      });
+      if(parentDropdown.options.length > 0) {
+        loadParentData(parentDropdown.value);
+        loadChildNodes(parentDropdown.value);
+      }
+    });
+
+    // Parent node change
+    parentDropdown.addEventListener('change', e => {
+      loadParentData(e.target.value);
+      loadChildNodes(e.target.value);
+    });
+
+    function loadParentData(parentId) {
+      // Remove previous listener
+      if(parentListener) parentListener.off();
+
+      parentListener = db.ref(`${parentId}/parent_data_history`).limitToLast(1);
+      parentListener.on('value', snapshot => {
+        parentDataDiv.innerHTML = '';
+        snapshot.forEach(dataSnap => {
+          const data = dataSnap.val();
+          for(const key in data) {
+            if(key === 'skip_this_field') continue; // Exclude 4th option
+            const div = document.createElement('div');
+            div.className = "bg-white p-4 shadow rounded";
+            div.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
+            parentDataDiv.appendChild(div);
+          }
+        });
+      });
+    }
+
+    function loadChildNodes(parentId) {
+      // Populate child dropdown
+      db.ref(`${parentId}/sensor_data_history`).once('value', snapshot => {
+        childDropdown.innerHTML = '';
+        snapshot.forEach(childSnap => {
+          const option = document.createElement('option');
+          option.value = childSnap.key;
+          option.text = childSnap.key;
+          childDropdown.appendChild(option);
+        });
+        if(childDropdown.options.length > 0) loadChildData(parentId, childDropdown.value);
+      });
+    }
+
+    // Child node change
+    childDropdown.addEventListener('change', e => {
+      loadChildData(parentDropdown.value, e.target.value);
+    });
+
+    function loadChildData(parentId, childId) {
+      // Remove previous listener
+      if(childListener) childListener.off();
+
+      childListener = db.ref(`${parentId}/sensor_data_history/${childId}`);
+      childListener.on('value', snapshot => {
+        childDataDiv.innerHTML = '';
+        const data = snapshot.val();
+        for(const key in data) {
+          if(key === 'skip_this_field') continue; // Exclude 4th option
+          const div = document.createElement('div');
+          div.className = "bg-white p-4 shadow rounded";
+          div.innerHTML = `<strong>${key}:</strong> ${data[key]}`;
+          childDataDiv.appendChild(div);
+        }
+      });
+    }
+
+    function logout() {
+      console.log("Logout clicked");
+      // Add Firebase logout if needed
+    }
+  </script>
+</body>
+</html>

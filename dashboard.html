@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring Dashboard</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body { background: #f5f6fa; }
+    </style>
+</head>
+<body class="p-6">
+
+    <!-- Header -->
+    <header class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">Parent Node Monitoring Dashboard</h1>
+        <p class="text-gray-600">Live data from Firebase</p>
+    </header>
+
+
+    <!-- Parent Data Section -->
+    <section class="mb-10">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Parent Data</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">Latitude</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="lat_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">Longitude</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="lon_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">Speed (km/h)</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="speed_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">Altitude (m)</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="alt_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">VSAT</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="vsat_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">USAT</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="usat_val">--</h3>
+            </div>
+
+            <div class="p-5 bg-white shadow rounded-xl">
+                <p class="text-gray-500">Accuracy (m)</p>
+                <h3 class="text-2xl font-bold text-gray-800" id="acc_val">--</h3>
+            </div>
+
+        </div>
+    </section>
+
+
+
+    <!-- Sensor Data Section -->
+    <section class="mb-10">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Sensor Nodes</h2>
+
+        <div id="sensor_card_container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- JS will populate sensor cards -->
+        </div>
+    </section>
+
+
+
+
+    <!-- Firebase + Logic -->
+    <script type="module">
+        // ================================
+        // ✅ 1. Import Firebase modules
+        // ================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+
+        // ================================
+        // ✅ 2. Firebase Configuration
+        // ================================
+        const firebaseConfig = {
+            apiKey: "YOUR_KEY",
+            authDomain: "YOUR_DOMAIN",
+            databaseURL: "YOUR_DB_URL",
+            projectId: "YOUR_PROJECT",
+            storageBucket: "YOUR_BUCKET",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP"
+        };
+
+        // Init Firebase + DB
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+
+        // ================================
+        // ✅ 3. Parent Node Live Listener
+        // ================================
+        const parentId = "parentId";   // adjust if your parent ID is dynamic
+
+        const parentRef = ref(db, `${parentId}/parent_data_history`);
+
+        onValue(parentRef, snapshot => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            updateParentData(data);
+        });
+
+
+        // ================================
+        // ✅ 4. Sensor Nodes Live Listener
+        // ================================
+        const sensorRef = ref(db, `${parentId}/sensor_data_history`);
+
+        let sensorCardCache = {};   // prevent duplicates & enable updates
+
+        onValue(sensorRef, snapshot => {
+            const sensors = snapshot.val();
+            if (!sensors) return;
+
+            // Clear UI container first
+            document.getElementById("sensor_card_container").innerHTML = "";
+
+            // Loop through each child node
+            Object.keys(sensors).forEach(key => {
+
+                const node = sensors[key];
+
+                createSensorCard(
+                    node.node_id || key,
+                    {
+                        current_rms: node.current_rms ?? "--",
+                        tilt_x: node.tilt_x ?? "--",
+                        tilt_y: node.tilt_y ?? "--",
+                        ts: node.ts ?? "--"
+                    }
+                );
+            });
+        });
+
+
+
+        // ================================
+        // ✅ 5. UI Update Functions
+        // ================================
+        function updateParentData(data) {
+            document.getElementById("lat_val").innerText   = data.lat ?? "--";
+            document.getElementById("lon_val").innerText   = data.lon ?? "--";
+            document.getElementById("speed_val").innerText = data.speed ?? "--";
+            document.getElementById("alt_val").innerText   = data.alt ?? "--";
+            document.getElementById("vsat_val").innerText  = data.vsat ?? "--";
+            document.getElementById("usat_val").innerText  = data.usat ?? "--";
+            document.getElementById("acc_val").innerText   = data.accuracy ?? "--";
+        }
+
+        function createSensorCard(nodeId, values) {
+
+            const container = document.getElementById("sensor_card_container");
+
+            const card = `
+                <div class="p-5 bg-white shadow rounded-xl">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-2">Node: ${nodeId}</h3>
+
+                    <p class="text-gray-600">Current RMS: 
+                        <span class="font-bold">${values.current_rms}</span></p>
+
+                    <p class="text-gray-600">Tilt X: 
+                        <span class="font-bold">${values.tilt_x}</span></p>
+
+                    <p class="text-gray-600">Tilt Y: 
+                        <span class="font-bold">${values.tilt_y}</span></p>
+
+                    <p class="text-gray-600">Timestamp: 
+                        <span class="font-medium">${values.ts}</span></p>
+                </div>
+            `;
+
+            container.insertAdjacentHTML("beforeend", card);
+        }
+    </script>
+
+</body>
+</html>

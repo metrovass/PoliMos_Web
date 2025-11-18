@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <title>Login/Register</title>
+    </head>
+    <body class="bg-gray-100 flex items-center justify-center h-screen">
+        <div class="min-h-screen w-full bg-cover bg-center flex items-center justify-center" style="background-image: url('data:image/jpeg;base64,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');">
+    
+            <!-- OVERLAY BLUR -->
+            <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+
+            <!-- AUTH CARD -->
+            <div class="relative bg-white/20 dark:bg-gray-900/30 backdrop-blur-xl 
+                        border border-white/30 shadow-xl rounded-2xl p-6 w-full max-w-sm z-10">
+
+                <!-- TABS -->
+                <div class="flex mb-4 border-b border-white/30">
+                    <button id="tabLogin"
+                        class="flex-1 py-2 text-center font-semibold text-white border-b-2 border-blue-400">
+                        Login
+                    </button>
+
+                    <button id="tabRegister"
+                        class="flex-1 py-2 text-center font-semibold text-gray-200 hover:text-white">
+                        Register
+                    </button>
+                </div>
+
+                <!-- LOGIN FORM -->
+                <div id="loginForm">
+                    <input type="email" id="loginEmail" placeholder="Email"
+                        class="w-full p-2 mb-3 bg-white/40 border rounded text-white placeholder-gray-200">
+
+                    <input type="password" id="loginPassword" placeholder="Password"
+                        class="w-full p-2 mb-3 bg-white/40 border rounded text-white placeholder-gray-200">
+
+                    <button id="loginBtn"
+                        class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg mt-2">
+                        Login
+                    </button>
+                </div>
+
+                <!-- REGISTER FORM -->
+                <div id="registerForm" class="hidden">
+                    <input type="email" id="registerEmail" placeholder="Email"
+                        class="w-full p-2 mb-3 bg-white/40 border rounded text-white placeholder-gray-200">
+
+                    <input type="password" id="registerPassword" placeholder="Password"
+                        class="w-full p-2 mb-3 bg-white/40 border rounded text-white placeholder-gray-200">
+
+                    <button id="registerBtn"
+                        class="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg mt-2">
+                        Register
+                    </button>
+                </div>
+
+                <p id="authMessage" class="mt-4 text-sm text-red-300 text-center"></p>
+            </div>
+        </div>
+
+        <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBRm9qP1aHVyVolTIGD42h3xbj18wJbx0",
+            authDomain: "polimos.firebaseapp.com",
+            databaseURL: "https://polimos-default-rtdb.firebaseio.com",
+            projectId: "polimos",
+            storageBucket: "polimos.firebasestorage.app",
+            messagingSenderId: "1063611639027",
+            appId: "1:1063611639027:web:8171882b9f8c7596ce4386",
+            measurementId: "G-6Q769JMP41"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const loginEmail = document.getElementById('loginEmail');
+        const loginPassword = document.getElementById('loginPassword');
+        const registerEmail = document.getElementById('registerEmail');
+        const registerPassword = document.getElementById('registerPassword');
+        const authMessage = document.getElementById('authMessage');
+
+        // TAB SWITCHING
+        const tabLogin = document.getElementById("tabLogin");
+        const tabRegister = document.getElementById("tabRegister");
+
+        const loginForm = document.getElementById("loginForm");
+        const registerForm = document.getElementById("registerForm");
+
+        tabLogin.onclick = () => {
+            tabLogin.classList.add("border-blue-400", "text-white", "border-b-2");
+            tabRegister.classList.remove("border-blue-400", "border-b-2");
+            loginForm.classList.remove("hidden");
+            registerForm.classList.add("hidden");
+        };
+
+        tabRegister.onclick = () => {
+            tabRegister.classList.add("border-blue-400", "text-white", "border-b-2");
+            tabLogin.classList.remove("border-blue-400", "border-b-2");
+            registerForm.classList.remove("hidden");
+            loginForm.classList.add("hidden");
+        };
+
+        // Register user
+        registerBtn.addEventListener('click', () => {
+            const email = registerEmail.value;
+            const password = registerPassword.value;
+
+            auth.createUserWithEmailAndPassword(email, password)
+            .then(userCredential => {
+                authMessage.textContent = "Registered successfully!";
+                window.location.href = "index.html"; // redirect to dashboard
+            })
+            .catch(error => {
+                authMessage.textContent = error.message;
+            });
+        });
+
+        // Login user
+        loginBtn.addEventListener('click', () => {
+            const email = loginEmail.value;
+            const password = loginPassword.value;
+
+            auth.signInWithEmailAndPassword(email, password)
+            .then(userCredential => {
+                authMessage.textContent = "Login successful!";
+                window.location.href = "index.html"; // redirect to dashboard
+            })
+            .catch(error => {
+                authMessage.textContent = error.message;
+            });
+        });
+
+        // Optional: redirect if user is already logged in
+        auth.onAuthStateChanged(user => {
+            if(user) {
+            window.location.href = "index.html";
+            }
+        });
+        </script>
+    </body>
+</html>
